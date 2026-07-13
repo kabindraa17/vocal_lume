@@ -16,19 +16,27 @@ class AppRoot extends ConsumerWidget {
     final isPlayerExpanded =
         ref.watch(playerExpansionProvider) == PlayerExpansion.expanded;
 
-    return PopScope(
-      canPop: !isPlayerExpanded,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && isPlayerExpanded) {
-          ref.read(playerExpansionProvider.notifier).collapse();
-        }
-      },
-      child: PlayerErrorListener(
-        child: Stack(
-          children: [
-            if (child != null) child!,
-            const DraggablePlayerOverlay(),
-          ],
+    // MaterialApp.builder sits above the Navigator Overlay. The persistent
+    // player (and its Slider/tooltips) need their own Overlay ancestor.
+    return Overlay.wrap(
+      child: PopScope(
+        canPop: !isPlayerExpanded,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && isPlayerExpanded) {
+            ref.read(playerExpansionProvider.notifier).collapse();
+          }
+        },
+        child: PlayerErrorListener(
+          child: Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.none,
+            children: [
+              ?child,
+              const Positioned.fill(
+                child: DraggablePlayerOverlay(),
+              ),
+            ],
+          ),
         ),
       ),
     );

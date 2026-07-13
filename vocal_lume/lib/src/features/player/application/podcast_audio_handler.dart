@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -23,14 +25,26 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
     required PodcastEpisode episode,
     required PodcastFeed feed,
     Duration? initialPosition,
+    String? localPath,
   }) async {
     final url = episode.enclosureUrl;
-    if (url == null || url.isEmpty) {
+    final hasLocal = localPath != null && localPath.isNotEmpty;
+    if (!hasLocal && (url == null || url.isEmpty)) {
       throw ArgumentError('Episode has no playable audio URL.');
     }
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
-      throw ArgumentError('Episode audio URL is invalid.');
+
+    final AudioSource source;
+    final String mediaId;
+    if (hasLocal) {
+      source = AudioSource.file(localPath);
+      mediaId = localPath;
+    } else {
+      final uri = Uri.tryParse(url!);
+      if (uri == null) {
+        throw ArgumentError('Episode audio URL is invalid.');
+      }
+      source = AudioSource.uri(uri);
+      mediaId = url;
     }
 
     _episode = episode;
@@ -39,7 +53,7 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
     final artwork = _artworkUrl(episode, feed);
     mediaItem.add(
       MediaItem(
-        id: url,
+        id: mediaId,
         title: episode.title,
         artist: feed.title,
         album: feed.title,
@@ -50,18 +64,20 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
         extras: {
           'episodeId': episode.id,
           'feedId': feed.id,
+          if (hasLocal) 'localPath': localPath,
         },
       ),
     );
 
     // Loading with an initial position avoids the audible jump of
     // load-then-seek when resuming a partially played episode.
+    // Don't await play() — setAudioSource already waits until ready enough
+    // to start, and play() returns once playback is underway.
     await _player.setAudioSource(
-      AudioSource.uri(uri),
+      source,
       initialPosition: initialPosition,
     );
-
-    await _player.play();
+    unawaited(_player.play());
   }
 
   static const skipForwardInterval = Duration(seconds: 30);

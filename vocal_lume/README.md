@@ -111,12 +111,12 @@ Credentials are read at compile time via `String.fromEnvironment` in `PodcastInd
 ## Platform notes
 
 - **Background audio** uses `audio_service` + `just_audio`. Android requires the foreground service entries in `AndroidManifest.xml`; iOS requires the `audio` background mode in `Info.plist` (both are already configured).
-- **Local storage** uses Drift (SQLite) for subscriptions and playback progress. Data stays on device until account sync is added.
+- **Offline downloads** use `background_downloader` and continue while the app is backgrounded. Files are stored under application support and played locally when available.
+- **Local storage** uses Drift (SQLite) for subscriptions, playback progress, and downloads. Data stays on device until account sync is added.
 
 ## Not implemented yet
 
 - User accounts / Supabase sync
-- Offline downloads
 - Push notifications
 - Share
 

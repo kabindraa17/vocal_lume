@@ -10,6 +10,7 @@ import 'src/core/logging/riverpod_logger_observer.dart';
 import 'src/core/routing/app_router.dart';
 import 'src/core/theme/app_colors.dart';
 import 'src/core/widgets/app_root.dart';
+import 'src/features/downloads/application/download_controller.dart';
 import 'src/features/player/application/audio_handler_provider.dart';
 import 'src/features/player/application/podcast_audio_handler.dart';
 
@@ -69,14 +70,17 @@ Future<void> main() async {
   );
 }
 
-class VocalLumeApp extends StatelessWidget {
+class VocalLumeApp extends ConsumerWidget {
   const VocalLumeApp({super.key});
 
   static const _seed = AppColors.primary;
   static const _background = AppColors.background;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Warm up the download engine so background tasks can resume.
+    ref.watch(downloadControllerProvider);
+
     return MaterialApp.router(
       title: 'VocaLume',
       debugShowCheckedModeBanner: false,

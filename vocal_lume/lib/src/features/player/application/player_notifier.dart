@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../core/providers/database_providers.dart';
+import '../../downloads/application/download_controller.dart';
 import '../../library/data/library_repository.dart';
 import '../../podcast/data/models/podcast_episode.dart';
 import '../../podcast/data/models/podcast_feed.dart';
@@ -56,11 +57,12 @@ class PlayerNotifier extends Notifier<NowPlayingState> {
     final session = ++_playSession;
     final url = episode.enclosureUrl;
 
-    // Persist progress of the episode we are switching away from.
+    // Persist previous episode in the background so playback can start sooner.
     if (state.hasEpisode && state.episode?.id != episode.id) {
-      await _persistProgress(force: true);
+      unawaited(_persistProgress(force: true));
     }
 
+    // Show the player immediately while audio loads.
     state = NowPlayingState(
       episode: episode,
       feed: feed,
@@ -69,7 +71,13 @@ class PlayerNotifier extends Notifier<NowPlayingState> {
       duration: Duration(seconds: episode.duration ?? 0),
     );
 
-    if (url == null || url.isEmpty) {
+    final localPath =
+        await ref.read(downloadRepositoryProvider).getCompletedLocalPath(
+              episode.id,
+            );
+    if (session != _playSession) return;
+
+    if (localPath == null && (url == null || url.isEmpty)) {
       _setPlaybackError('This episode does not have a playable audio file.');
       return;
     }
@@ -85,6 +93,7 @@ class PlayerNotifier extends Notifier<NowPlayingState> {
     _switchingSource = true;
 
     try {
+      // Local SQLite read — typically a few ms; keeps resume position accurate.
       final savedPositionMs = await _library?.getSavedPositionMs(episode.id);
       if (session != _playSession) return;
 
@@ -96,6 +105,7 @@ class PlayerNotifier extends Notifier<NowPlayingState> {
         episode: episode,
         feed: feed,
         initialPosition: initialPosition,
+        localPath: localPath,
       );
       if (session != _playSession) return;
 
@@ -110,7 +120,7 @@ class PlayerNotifier extends Notifier<NowPlayingState> {
         isPlaying: true,
         clearErrorMessage: true,
       );
-      await _persistProgress(force: true);
+      unawaited(_persistProgress(force: true));
     } catch (error, _) {
       if (session != _playSession) return;
       _switchingSource = false;
