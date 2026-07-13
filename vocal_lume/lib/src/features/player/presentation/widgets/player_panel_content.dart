@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -8,167 +8,109 @@ import '../../../../core/theme/app_colors.dart';
 import '../../application/player_expansion_notifier.dart';
 import '../../application/player_notifier.dart';
 import '../../domain/now_playing_state.dart';
+import 'playback_error_banner.dart';
 
-/// Compact player bar shown when the draggable panel is collapsed.
+/// Compact floating bar — artwork, title, play/pause, bottom progress.
 class MiniPlayerContent extends ConsumerWidget {
   const MiniPlayerContent({
     super.key,
     required this.onExpand,
-    this.bottomInset = 0,
   });
 
   final VoidCallback onExpand;
-  final double bottomInset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(playerProvider);
-    final theme = Theme.of(context);
     final episode = state.episode!;
     final feed = state.feed;
     final artwork = episode.artworkUrl.isNotEmpty
         ? episode.artworkUrl
         : feed?.artworkUrl ?? '';
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(8, 0, 8, 6 + bottomInset),
-      child: Material(
-        color: AppColors.surfaceElevated,
-        elevation: 8,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onExpand,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onExpand,
-              onVerticalDragUpdate: (details) {
-                if (details.primaryDelta != null && details.primaryDelta! < -4) {
-                  onExpand();
-                }
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.onSurfaceMuted.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 4, 6),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: artwork.isEmpty
-                              ? Container(
-                                  width: 44,
-                                  height: 44,
-                                  color: AppColors.surfaceHigh,
-                                  child: const Icon(Icons.podcasts, size: 22),
-                                )
-                              : CachedNetworkImage(
-                                  imageUrl: artwork,
-                                  width: 44,
-                                  height: 44,
-                                  fit: BoxFit.cover,
-                                ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                episode.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: artwork.isEmpty
+                          ? Container(
+                              width: 48,
+                              height: 48,
+                              color: AppColors.surfaceHigh,
+                              child: const Icon(
+                                Icons.podcasts,
+                                size: 22,
+                                color: Colors.white70,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                state.hasError
-                                    ? 'Playback failed — tap to retry'
-                                    : (feed?.displayTitle ??
-                                        episode.feedTitle?.trim() ??
-                                        'Podcast'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: state.hasError
-                                      ? AppColors.danger
-                                      : AppColors.onSurfaceMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (state.isLoading)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12),
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: AppColors.primary,
-                              ),
+                            )
+                          : CachedNetworkImage(
+                              imageUrl: artwork,
+                              width: 48,
+                              height: 48,
+                              fit: BoxFit.cover,
                             ),
-                          )
-                        else
-                          IconButton(
-                            onPressed: () => ref
-                                .read(playerProvider.notifier)
-                                .togglePlayPause(),
-                            icon: Icon(
-                              state.hasError
-                                  ? Icons.refresh_rounded
-                                  : state.isCompleted
-                                      ? Icons.replay_rounded
-                                      : state.isPlaying
-                                          ? Icons.pause_circle_filled_rounded
-                                          : Icons.play_circle_filled_rounded,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            episode.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            state.hasError
+                                ? 'Tap to retry'
+                                : (feed?.displayTitle ??
+                                    episode.feedTitle?.trim() ??
+                                    'Podcast'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
                               color: state.hasError
                                   ? AppColors.danger
-                                  : AppColors.primary,
-                              size: 38,
+                                  : AppColors.onSurfaceMuted,
+                              fontSize: 12,
                             ),
-                            tooltip: state.isPlaying ? 'Pause' : 'Play',
                           ),
-                        IconButton(
-                          onPressed: () async {
-                            await ref.read(playerProvider.notifier).clear();
-                            ref
-                                .read(playerExpansionProvider.notifier)
-                                .collapse();
-                          },
-                          icon: Icon(
-                            Icons.close_rounded,
-                            size: 22,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.5),
-                          ),
-                          tooltip: 'Dismiss',
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    _MiniPlayButton(
+                      isLoading: state.isLoading,
+                      isPlaying: state.isPlaying,
+                      isCompleted: state.isCompleted,
+                      hasError: state.hasError,
+                      onTap: () =>
+                          ref.read(playerProvider.notifier).togglePlayPause(),
+                    ),
+                  ],
+                ),
               ),
             ),
             LinearProgressIndicator(
-              value: state.progress,
-              minHeight: 3,
+              value: state.isLoading ? null : state.progress.clamp(0.0, 1.0),
+              minHeight: 2,
               backgroundColor: AppColors.surfaceHigh,
               color: AppColors.primary,
             ),
@@ -179,16 +121,69 @@ class MiniPlayerContent extends ConsumerWidget {
   }
 }
 
-/// Full player controls used inside the expanded draggable panel.
+class _MiniPlayButton extends StatelessWidget {
+  const _MiniPlayButton({
+    required this.isLoading,
+    required this.isPlaying,
+    required this.isCompleted,
+    required this.hasError,
+    required this.onTap,
+  });
+
+  final bool isLoading;
+  final bool isPlaying;
+  final bool isCompleted;
+  final bool hasError;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: AppColors.primary,
+          ),
+        ),
+      );
+    }
+
+    final icon = hasError
+        ? Icons.refresh_rounded
+        : isCompleted
+            ? Icons.replay_rounded
+            : isPlaying
+                ? Icons.pause_rounded
+                : Icons.play_arrow_rounded;
+
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(
+        icon,
+        size: 30,
+        color: hasError ? AppColors.danger : Colors.white,
+      ),
+      tooltip: isPlaying ? 'Pause' : 'Play',
+    );
+  }
+}
+
+/// Full-screen now playing view inside the morphing sheet.
 class ExpandedPlayerContent extends ConsumerStatefulWidget {
   const ExpandedPlayerContent({
     super.key,
     required this.onCollapse,
-    this.collapseProgress = 0,
+    this.onDragUpdate,
+    this.onDragEnd,
   });
 
   final VoidCallback onCollapse;
-  final double collapseProgress;
+  final ValueChanged<double>? onDragUpdate;
+  final ValueChanged<double>? onDragEnd;
 
   @override
   ConsumerState<ExpandedPlayerContent> createState() =>
@@ -219,14 +214,13 @@ class _ExpandedPlayerContentState extends ConsumerState<ExpandedPlayerContent> {
           )
         : state.position;
     final displayedRemaining = state.duration - displayedPosition;
-    final artworkScale = lerpDouble(0.55, 1.0, 1 - widget.collapseProgress)!;
 
-    return Container(
+    return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          stops: [0.0, 0.55, 1.0],
+          stops: [0.0, 0.4, 1.0],
           colors: [
             Color(0xFF2A1B45),
             AppColors.background,
@@ -235,120 +229,130 @@ class _ExpandedPlayerContentState extends ConsumerState<ExpandedPlayerContent> {
         ),
       ),
       child: SafeArea(
-        bottom: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            physics: widget.collapseProgress > 0.2
-                ? const NeverScrollableScrollPhysics()
-                : null,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Column(
-                children: [
-                  _ExpandedHeader(
-                    showTitle: showTitle,
-                    onCollapse: widget.onCollapse,
-                  ),
-                  const SizedBox(height: 16),
-                  Transform.scale(
-                    scale: artworkScale,
-                    child: _ExpandedArtwork(artwork: artwork),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    episode.title,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    showTitle,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: AppColors.onSurfaceMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (state.errorMessage != null)
-                    Text(
-                      state.errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.danger,
-                      ),
-                    )
-                  else
-                    const SizedBox(height: 44),
-                  const SizedBox(height: 8),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 7,
-                        elevation: 2,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 18,
-                      ),
-                    ),
-                    child: Slider(
-                      value: displayedProgress,
-                      secondaryTrackValue:
-                          state.bufferedProgress.clamp(0.0, 1.0),
-                      onChanged: state.duration.inMilliseconds > 0
-                          ? (value) => setState(() => _dragProgress = value)
-                          : null,
-                      onChangeEnd: (value) {
-                        final position = Duration(
-                          milliseconds:
-                              (value * state.duration.inMilliseconds).round(),
-                        );
-                        ref.read(playerProvider.notifier).seek(position);
-                        setState(() => _dragProgress = null);
-                      },
-                      activeColor: AppColors.primary,
-                      secondaryActiveColor:
-                          AppColors.primary.withValues(alpha: 0.25),
-                      inactiveColor: AppColors.surfaceHigh,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _formatClock(displayedPosition),
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: AppColors.onSurfaceMuted,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                        Text(
-                          '-${_formatClock(displayedRemaining)}',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: AppColors.onSurfaceMuted,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _ExpandedControls(state: state, onCollapse: widget.onCollapse),
-                  const SizedBox(height: 24),
-                ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            children: [
+              _ExpandedHeader(
+                showTitle: showTitle,
+                onCollapse: widget.onCollapse,
+                onDragUpdate: widget.onDragUpdate,
+                onDragEnd: widget.onDragEnd,
               ),
-            ),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onVerticalDragUpdate: widget.onDragUpdate == null
+                      ? null
+                      : (details) =>
+                          widget.onDragUpdate!(details.primaryDelta ?? 0),
+                  onVerticalDragEnd: widget.onDragEnd == null
+                      ? null
+                      : (details) =>
+                          widget.onDragEnd!(details.primaryVelocity ?? 0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: _ExpandedArtwork(artwork: artwork),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        episode.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        showTitle,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: AppColors.onSurfaceMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (state.errorMessage != null) ...[
+                PlaybackErrorBanner(
+                  message: state.errorMessage!,
+                  onRetry: () => ref.read(playerProvider.notifier).retry(),
+                  onDismiss: () =>
+                      ref.read(playerProvider.notifier).dismissError(),
+                ),
+                const SizedBox(height: 12),
+              ] else
+                _Waveform(
+                  isPlaying: state.isPlaying,
+                  progress: displayedProgress,
+                ),
+              const SizedBox(height: 8),
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 4,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 7,
+                    elevation: 2,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 16,
+                  ),
+                ),
+                child: Slider(
+                  value: displayedProgress,
+                  secondaryTrackValue: state.bufferedProgress.clamp(0.0, 1.0),
+                  onChanged: state.duration.inMilliseconds > 0
+                      ? (value) => setState(() => _dragProgress = value)
+                      : null,
+                  onChangeEnd: (value) {
+                    final position = Duration(
+                      milliseconds:
+                          (value * state.duration.inMilliseconds).round(),
+                    );
+                    ref.read(playerProvider.notifier).seek(position);
+                    setState(() => _dragProgress = null);
+                  },
+                  activeColor: AppColors.primary,
+                  secondaryActiveColor:
+                      AppColors.primary.withValues(alpha: 0.25),
+                  inactiveColor: AppColors.surfaceHigh,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _formatClock(displayedPosition),
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: AppColors.onSurfaceMuted,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    Text(
+                      '-${_formatClock(displayedRemaining)}',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: AppColors.onSurfaceMuted,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ExpandedControls(state: state),
+              const SizedBox(height: 8),
+            ],
           ),
         ),
       ),
@@ -371,10 +375,14 @@ class _ExpandedHeader extends StatelessWidget {
   const _ExpandedHeader({
     required this.showTitle,
     required this.onCollapse,
+    this.onDragUpdate,
+    this.onDragEnd,
   });
 
   final String showTitle;
   final VoidCallback onCollapse;
+  final ValueChanged<double>? onDragUpdate;
+  final ValueChanged<double>? onDragEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -382,28 +390,30 @@ class _ExpandedHeader extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onVerticalDragUpdate: (details) {
-        if (details.primaryDelta != null && details.primaryDelta! > 6) {
-          onCollapse();
-        }
-      },
+      onVerticalDragUpdate: onDragUpdate == null
+          ? null
+          : (details) => onDragUpdate!(details.primaryDelta ?? 0),
+      onVerticalDragEnd: onDragEnd == null
+          ? null
+          : (details) => onDragEnd!(details.primaryVelocity ?? 0),
       child: Column(
         children: [
           const SizedBox(height: 8),
           Container(
-            width: 36,
+            width: 40,
             height: 4,
             decoration: BoxDecoration(
               color: AppColors.onSurfaceMuted.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(999),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
             children: [
               IconButton(
                 onPressed: onCollapse,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
+                tooltip: 'Minimize',
               ),
               Expanded(
                 child: Column(
@@ -412,7 +422,7 @@ class _ExpandedHeader extends StatelessWidget {
                       'NOW PLAYING',
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: AppColors.onSurfaceMuted,
-                        letterSpacing: 2,
+                        letterSpacing: 1.6,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -446,81 +456,83 @@ class _ExpandedArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.18),
-              blurRadius: 48,
-              offset: const Offset(0, 16),
-            ),
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: artwork.isEmpty
-              ? Container(
-                  color: AppColors.surfaceHigh,
-                  child: const Icon(Icons.podcasts, size: 80),
-                )
-              : CachedNetworkImage(
-                  imageUrl: artwork,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) => Container(color: AppColors.surfaceHigh),
-                  errorWidget: (_, _, _) => Container(
-                    color: AppColors.surfaceHigh,
-                    child: const Icon(Icons.podcasts, size: 80),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = math.min(
+          320.0,
+          math.min(constraints.maxWidth, constraints.maxHeight),
+        );
+
+        if (size <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        return Center(
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    blurRadius: 32,
+                    offset: const Offset(0, 16),
                   ),
-                ),
-        ),
-      ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: artwork.isEmpty
+                    ? Container(
+                        color: AppColors.surfaceHigh,
+                        child: const Icon(Icons.podcasts, size: 72),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: artwork,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) =>
+                            Container(color: AppColors.surfaceHigh),
+                        errorWidget: (_, _, _) => Container(
+                          color: AppColors.surfaceHigh,
+                          child: const Icon(Icons.podcasts, size: 72),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
 class _ExpandedControls extends ConsumerWidget {
-  const _ExpandedControls({
-    required this.state,
-    required this.onCollapse,
-  });
+  const _ExpandedControls({required this.state});
 
   final NowPlayingState state;
-  final VoidCallback onCollapse;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(playerProvider.notifier);
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _SpeedChip(speed: state.speed, enabled: !state.isLoading),
-        Row(
-          children: [
-            IconButton(
-              onPressed: notifier.skipBackward,
-              icon: const Icon(Icons.replay_10_rounded),
-              iconSize: 36,
-              tooltip: 'Back 10 seconds',
-            ),
-            const SizedBox(width: 12),
-            _PlayPauseButton(state: state),
-            const SizedBox(width: 12),
-            IconButton(
-              onPressed: notifier.skipForward,
-              icon: const Icon(Icons.forward_30_rounded),
-              iconSize: 36,
-              tooltip: 'Forward 30 seconds',
-            ),
-          ],
+        IconButton(
+          onPressed: notifier.skipBackward,
+          icon: const Icon(Icons.replay_10_rounded),
+          iconSize: 34,
+          tooltip: 'Back 10 seconds',
+        ),
+        _PlayPauseButton(state: state),
+        IconButton(
+          onPressed: notifier.skipForward,
+          icon: const Icon(Icons.forward_30_rounded),
+          iconSize: 34,
+          tooltip: 'Forward 30 seconds',
         ),
         IconButton(
           onPressed: () async {
@@ -561,21 +573,30 @@ class _PlayPauseButton extends ConsumerWidget {
           : () => ref.read(playerProvider.notifier).togglePlayPause(),
       style: FilledButton.styleFrom(
         shape: const CircleBorder(),
-        padding: const EdgeInsets.all(22),
-        backgroundColor:
-            state.hasError ? AppColors.danger : AppColors.primary,
+        padding: const EdgeInsets.all(20),
+        backgroundColor: state.hasError ? AppColors.danger : AppColors.primary,
         disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
       ),
       child: state.isLoading
           ? const SizedBox(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               child: CircularProgressIndicator(
                 strokeWidth: 3,
                 color: AppColors.background,
               ),
             )
-          : Icon(icon, size: 36, color: AppColors.background),
+          : AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, animation) =>
+                  ScaleTransition(scale: animation, child: child),
+              child: Icon(
+                icon,
+                key: ValueKey(icon),
+                size: 34,
+                color: AppColors.background,
+              ),
+            ),
     );
   }
 }
@@ -594,7 +615,8 @@ class _SpeedChip extends ConsumerWidget {
       onPressed: enabled ? () => _showSpeedSheet(context, ref) : null,
       style: TextButton.styleFrom(
         backgroundColor: AppColors.surfaceHigh,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        minimumSize: const Size(52, 40),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
         ),
@@ -661,4 +683,128 @@ class _SpeedChip extends ConsumerWidget {
     }
     return '${speed}x';
   }
+}
+
+class _Waveform extends StatefulWidget {
+  const _Waveform({required this.isPlaying, required this.progress});
+
+  final bool isPlaying;
+  final double progress;
+
+  @override
+  State<_Waveform> createState() => _WaveformState();
+}
+
+class _WaveformState extends State<_Waveform>
+    with SingleTickerProviderStateMixin {
+  static const _barCount = 36;
+
+  late final AnimationController _controller;
+  late final List<double> _heights;
+
+  @override
+  void initState() {
+    super.initState();
+    final random = math.Random(7);
+    _heights = List.generate(
+      _barCount,
+      (_) => 0.25 + random.nextDouble() * 0.75,
+    );
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    if (widget.isPlaying) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(_Waveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPlaying && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.isPlaying && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => CustomPaint(
+          size: const Size(double.infinity, 40),
+          painter: _WaveformPainter(
+            heights: _heights,
+            phase: _controller.value,
+            isPlaying: widget.isPlaying,
+            progress: widget.progress,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  _WaveformPainter({
+    required this.heights,
+    required this.phase,
+    required this.isPlaying,
+    required this.progress,
+  });
+
+  final List<double> heights;
+  final double phase;
+  final bool isPlaying;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final barCount = heights.length;
+    const barWidth = 4.0;
+    final gap =
+        (size.width - barCount * barWidth) / math.max(barCount - 1, 1);
+    final playedBars = (progress * barCount).floor();
+
+    for (var i = 0; i < barCount; i++) {
+      final animated = isPlaying
+          ? 0.6 +
+              0.4 *
+                  math.sin(
+                    (phase * 2 * math.pi) + i * 0.7,
+                  ).abs()
+          : 0.55;
+      final barHeight =
+          (heights[i] * animated * size.height).clamp(4.0, size.height);
+      final x = i * (barWidth + gap);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          x,
+          (size.height - barHeight) / 2,
+          barWidth,
+          barHeight,
+        ),
+        const Radius.circular(999),
+      );
+      final paint = Paint()
+        ..color = i <= playedBars
+            ? AppColors.primary
+            : AppColors.primary.withValues(alpha: 0.22);
+      canvas.drawRRect(rect, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter oldDelegate) =>
+      oldDelegate.phase != phase ||
+      oldDelegate.isPlaying != isPlaying ||
+      oldDelegate.progress != progress;
 }

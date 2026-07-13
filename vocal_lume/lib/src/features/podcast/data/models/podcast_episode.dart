@@ -40,6 +40,11 @@ class PodcastEpisode {
 
   String get descriptionText => _stripHtml(description ?? '');
 
+  bool get hasPlayableAudio {
+    final url = enclosureUrl;
+    return url != null && url.isNotEmpty;
+  }
+
   factory PodcastEpisode.fromJson(Map<String, dynamic> json) {
     return PodcastEpisode(
       id: asInt(json['id']),
@@ -48,7 +53,7 @@ class PodcastEpisode {
       description: json['description'] as String?,
       duration: asIntOrNull(json['duration']),
       datePublished: asIntOrNull(json['datePublished']),
-      enclosureUrl: json['enclosureUrl'] as String?,
+      enclosureUrl: _parseEnclosureUrl(json),
       image: json['image'] as String?,
       feedTitle: json['feedTitle'] as String?,
       feedImage: json['feedImage'] as String?,
@@ -56,6 +61,22 @@ class PodcastEpisode {
       explicit: asIntOrNull(json['explicit']) == 1,
     );
   }
+}
+
+String? _parseEnclosureUrl(Map<String, dynamic> json) {
+  final direct = json['enclosureUrl'] as String?;
+  if (direct != null && direct.trim().isNotEmpty) return direct.trim();
+
+  final enclosure = json['enclosure'];
+  if (enclosure is Map<String, dynamic>) {
+    final nested = enclosure['url'] as String?;
+    if (nested != null && nested.trim().isNotEmpty) return nested.trim();
+  }
+
+  final mediaUrl = json['mediaUrl'] as String?;
+  if (mediaUrl != null && mediaUrl.trim().isNotEmpty) return mediaUrl.trim();
+
+  return null;
 }
 
 String _stripHtml(String input) {

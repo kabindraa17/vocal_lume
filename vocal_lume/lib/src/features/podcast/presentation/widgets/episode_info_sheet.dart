@@ -5,6 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/routing/app_sheet.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../downloads/application/download_controller.dart';
+import '../../../downloads/domain/download_item.dart';
+import '../../../downloads/domain/download_live_stats.dart';
+import '../../../downloads/presentation/widgets/episode_download_progress_bar.dart';
+import '../../../downloads/presentation/widgets/start_episode_download.dart';
 import '../../../player/presentation/widgets/play_episode.dart';
 import '../../data/models/podcast_episode.dart';
 import '../../data/models/podcast_feed.dart';
@@ -37,8 +42,10 @@ class _EpisodeInfoSheetBody extends ConsumerWidget {
     final artwork = episode.artworkUrl.isNotEmpty
         ? episode.artworkUrl
         : feed.artworkUrl;
-    final canPlay =
-        episode.enclosureUrl != null && episode.enclosureUrl!.isNotEmpty;
+    final download =
+        ref.watch(downloadForEpisodeProvider(episode.id)).value;
+    final live = ref.watch(downloadLiveStatsProvider(episode.id));
+    final canPlay = episode.hasPlayableAudio || download?.canPlayOffline == true;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -97,6 +104,14 @@ class _EpisodeInfoSheetBody extends ConsumerWidget {
                               color: AppColors.onSurfaceMuted,
                             ),
                           ),
+                        if (download?.canPlayOffline == true)
+                          Text(
+                            'Downloaded',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -109,9 +124,9 @@ class _EpisodeInfoSheetBody extends ConsumerWidget {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: canPlay
-                  ? () async {
+                  ? () {
                       Navigator.of(context).pop();
-                      await playEpisode(
+                      playEpisode(
                         ref,
                         episode: episode,
                         feed: feed,
@@ -121,6 +136,28 @@ class _EpisodeInfoSheetBody extends ConsumerWidget {
                   : null,
               icon: const Icon(Icons.play_arrow_rounded),
               label: const Text('Play episode'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (download?.status.isActive == true) ...[
+            EpisodeDownloadProgressBar(
+              download: download!,
+              live: live,
+              onCancel: () => ref
+                  .read(downloadControllerProvider.notifier)
+                  .cancel(episode.id),
+            ),
+            const SizedBox(height: 10),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: episode.hasPlayableAudio ||
+                      download?.status.isCompleted == true
+                  ? () => _handleDownloadAction(context, ref, download)
+                  : null,
+              icon: Icon(_downloadIcon(download)),
+              label: Text(_downloadLabel(download, live)),
             ),
           ),
           if (episode.descriptionText.isNotEmpty) ...[
@@ -149,6 +186,58 @@ class _EpisodeInfoSheetBody extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+
+  IconData _downloadIcon(DownloadItem? download) {
+    if (download?.status.isActive == true) return Icons.downloading_rounded;
+    if (download?.status.isCompleted == true) {
+      return Icons.delete_outline_rounded;
+    }
+    if (download?.status == EpisodeDownloadStatus.failed) {
+      return Icons.refresh_rounded;
+    }
+    return Icons.download_rounded;
+  }
+
+  String _downloadLabel(DownloadItem? download, [DownloadLiveStats? live]) {
+    if (download?.status.isActive == true) {
+      final progress = live?.progress ?? download!.progress;
+      final pct = (progress * 100).clamp(0, 100).round();
+      return pct > 0
+          ? 'Downloading $pct% — tap to cancel'
+          : 'Downloading — tap to cancel';
+    }
+    if (download?.status.isCompleted == true) return 'Remove download';
+    if (download?.status == EpisodeDownloadStatus.failed) {
+      return 'Retry download';
+    }
+    return 'Download for offline';
+  }
+
+  Future<void> _handleDownloadAction(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadItem? download,
+  ) async {
+    final controller = ref.read(downloadControllerProvider.notifier);
+    if (download?.status.isActive == true) {
+      await controller.cancel(episode.id);
+      return;
+    }
+    if (download?.status.isCompleted == true) {
+      await controller.delete(episode.id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Download removed')),
+      );
+      return;
+    }
+    await startEpisodeDownload(
+      context,
+      ref,
+      episode: episode,
+      feed: feed,
     );
   }
 }

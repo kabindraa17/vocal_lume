@@ -23,6 +23,10 @@ dependencies:
   just_audio: ^0.9.36
   audio_service: ^0.18.12
 
+  # Downloads
+  background_downloader: ^9.2.3
+  connectivity_plus: ^6.1.4
+
   # Navigation
   go_router: ^13.2.0
 

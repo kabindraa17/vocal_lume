@@ -5,18 +5,27 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/podcast_providers.dart';
 import '../../../core/providers/database_providers.dart';
+import '../../downloads/application/download_controller.dart';
+import '../../downloads/presentation/widgets/episode_download_button.dart';
+import '../../downloads/presentation/widgets/episode_download_progress_bar.dart';
 import '../../library/application/library_providers.dart';
 import '../../../core/utils/formatters.dart';
 import '../data/models/podcast_episode.dart';
 import '../data/models/podcast_feed.dart';
+import '../domain/podcast_feed_preview.dart';
 import '../../player/presentation/widgets/play_episode.dart';
 import 'widgets/episode_info_sheet.dart';
 import 'widgets/podcast_artwork.dart';
 
 class PodcastDetailScreen extends ConsumerWidget {
-  const PodcastDetailScreen({super.key, required this.feedId});
+  const PodcastDetailScreen({
+    super.key,
+    required this.feedId,
+    this.preview,
+  });
 
   final int feedId;
+  final PodcastFeedPreview? preview;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,19 +34,37 @@ class PodcastDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       body: feed.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () {
+          if (preview != null) {
+            return _PodcastDetailBody(
+              feed: _previewFeed(preview!),
+              feedId: feedId,
+            );
+          }
+          return const Center(child: CircularProgressIndicator());
+        },
         error: (error, _) => _ErrorBody(
           message: error.toString(),
           onRetry: () => ref.invalidate(podcastFeedProvider(feedId)),
         ),
         data: (feedData) => _PodcastDetailBody(
-          feed: feedData,
+          feed: feedData.withPreview(preview),
           feedId: feedId,
         ),
       ),
       backgroundColor: theme.scaffoldBackgroundColor,
     );
   }
+}
+
+PodcastFeed _previewFeed(PodcastFeedPreview preview) {
+  return PodcastFeed(
+    id: preview.feedId,
+    title: preview.title,
+    author: preview.author,
+    image: preview.artworkUrl,
+    artwork: preview.artworkUrl,
+  );
 }
 
 class _PodcastDetailBody extends ConsumerStatefulWidget {
@@ -119,17 +146,7 @@ class _PodcastDetailBodyState extends ConsumerState<_PodcastDetailBody> {
     final isFollowing = subscribedIds.contains(widget.feedId);
     final library = ref.read(libraryRepositoryProvider);
     final feed = widget.feed;
-
-    if (_isInitialLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_episodes.isEmpty && _error != null) {
-      return _ErrorBody(
-        message: _error!,
-        onRetry: () => _loadEpisodes(isInitialLoad: true),
-      );
-    }
+    final host = feed.author?.trim();
 
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -212,13 +229,14 @@ class _PodcastDetailBodyState extends ConsumerState<_PodcastDetailBody> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  'Hosted by ${feed.hostName}',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                if (host != null && host.isNotEmpty)
+                  Text(
+                    'Hosted by $host',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                if (host != null && host.isNotEmpty) const SizedBox(height: 16),
                 Row(
                   children: [
                     FilledButton.icon(
@@ -264,7 +282,22 @@ class _PodcastDetailBodyState extends ConsumerState<_PodcastDetailBody> {
             ),
           ),
         ),
-        if (_episodes.isEmpty)
+        if (_isInitialLoading)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (_episodes.isEmpty && _error != null)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _ErrorBody(
+              message: _error!,
+              onRetry: () => _loadEpisodes(isInitialLoad: true),
+            ),
+          )
+        else if (_episodes.isEmpty)
           const SliverFillRemaining(
             hasScrollBody: false,
             child: Center(child: Text('No episodes found.')),
@@ -363,110 +396,158 @@ class _EpisodeCard extends ConsumerWidget {
         ? episode.artworkUrl
         : feed.artworkUrl;
 
+    final canPlay = episode.hasPlayableAudio;
+    final download =
+        ref.watch(downloadForEpisodeProvider(episode.id)).value;
+    final live = ref.watch(downloadLiveStatsProvider(episode.id));
+    final canPlayOffline = download?.canPlayOffline == true;
+    final isPlayable = canPlay || canPlayOffline;
+    final isDownloading = download?.status.isActive == true;
+
+    void handlePlay() {
+      if (!isPlayable) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No audio file available for this episode.'),
+          ),
+        );
+        return;
+      }
+      // Open the player fully; the podcast detail page stays
+      // underneath as the back destination when collapsed.
+      playEpisode(
+        ref,
+        episode: episode,
+        feed: feed,
+        expandPlayer: true,
+      );
+    }
+
     return Material(
       color: theme.colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: InkWell(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: handlePlay,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                onTap: episode.enclosureUrl == null
-                    ? null
-                    : () => playEpisode(
-                          ref,
-                          episode: episode,
-                          feed: feed,
-                        ),
-                child: Row(
+                child: artwork.isEmpty
+                    ? PodcastArtwork(feed: feed, size: 72)
+                    : CachedNetworkImage(
+                        imageUrl: artwork,
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: artwork.isEmpty
-                          ? PodcastArtwork(feed: feed, size: 72)
-                          : CachedNetworkImage(
-                              imageUrl: artwork,
-                              width: 72,
-                              height: 72,
-                              fit: BoxFit.cover,
-                            ),
+                    Text(
+                      episode.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          Formatters.duration(episode.duration),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        if (canPlayOffline) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.offline_pin_rounded,
+                            size: 14,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 4),
                           Text(
-                            episode.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
+                            'Offline',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            Formatters.duration(episode.duration),
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            episode.shortDescription,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            Formatters.publishedDate(episode.datePublished),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                            ),
-                          ),
                         ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      episode.shortDescription,
+                      maxLines: isDownloading ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                     ),
+                    if (isDownloading && download != null) ...[
+                      const SizedBox(height: 10),
+                      EpisodeDownloadProgressBar(
+                        download: download,
+                        live: live,
+                        compact: true,
+                        onCancel: () => ref
+                            .read(downloadControllerProvider.notifier)
+                            .cancel(episode.id),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        Formatters.publishedDate(episode.datePublished),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              onPressed: () => showEpisodeInfoSheet(
-                context,
-                episode: episode,
-                feed: feed,
+              const SizedBox(width: 4),
+              EpisodeDownloadButton(episode: episode, feed: feed),
+              IconButton(
+                onPressed: () => showEpisodeInfoSheet(
+                  context,
+                  episode: episode,
+                  feed: feed,
+                ),
+                icon: Icon(
+                  Icons.info_outline_rounded,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+                tooltip: 'Episode details',
               ),
-              icon: Icon(
-                Icons.info_outline_rounded,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              IconButton(
+                onPressed: handlePlay,
+                icon: Icon(
+                  Icons.play_circle_fill,
+                  color: isPlayable
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  size: 36,
+                ),
+                tooltip: 'Play episode',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
               ),
-              tooltip: 'Episode details',
-            ),
-            IconButton(
-              onPressed: episode.enclosureUrl == null
-                  ? null
-                  : () => playEpisode(
-                        ref,
-                        episode: episode,
-                        feed: feed,
-                        expandPlayer: true,
-                      ),
-              icon: Icon(
-                Icons.play_circle_fill,
-                color: theme.colorScheme.primary,
-                size: 36,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

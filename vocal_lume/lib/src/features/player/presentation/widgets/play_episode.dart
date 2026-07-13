@@ -7,35 +7,47 @@ import '../../../podcast/data/models/podcast_episode.dart';
 import '../../../podcast/data/models/podcast_feed.dart';
 
 /// Starts playback and optionally expands the draggable player.
+///
+/// Expands immediately (when requested) so the UI feels instant; audio load
+/// continues in the background.
 Future<void> playEpisode(
   WidgetRef ref, {
   required PodcastEpisode episode,
   required PodcastFeed feed,
   bool expandPlayer = false,
 }) async {
-  await ref.read(playerProvider.notifier).play(
+  // Kick off playback first so the mini player appears immediately.
+  final playFuture = ref.read(playerProvider.notifier).play(
         episode: episode,
         feed: feed,
       );
   if (expandPlayer) {
     ref.read(playerExpansionProvider.notifier).expand();
   }
+  await playFuture;
 }
 
 /// Resumes or starts an episode from library activity using stored IDs.
+///
+/// Only fetches the episode (one network call). Feed metadata is taken from
+/// the episode payload so playback can start sooner.
 Future<void> playEpisodeById(
   WidgetRef ref, {
   required int feedId,
   required int episodeId,
-  bool expandPlayer = true,
+  bool expandPlayer = false,
 }) async {
   final repository = ref.read(podcastRepositoryProvider);
-  final results = await Future.wait<dynamic>([
-    repository.podcastFeed(feedId),
-    repository.episodeById(episodeId),
-  ]);
-  final feed = results[0] as PodcastFeed;
-  final episode = results[1] as PodcastEpisode;
+  final episode = await repository.episodeById(episodeId);
+  final feed = PodcastFeed(
+    id: feedId,
+    title: episode.feedTitle?.trim().isNotEmpty == true
+        ? episode.feedTitle!.trim()
+        : 'Podcast',
+    author: episode.feedAuthor,
+    image: episode.feedImage,
+    artwork: episode.feedImage,
+  );
   await playEpisode(
     ref,
     episode: episode,

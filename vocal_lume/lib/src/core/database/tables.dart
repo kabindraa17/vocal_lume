@@ -26,3 +26,22 @@ class PlaybackProgressEntries extends Table {
   @override
   Set<Column<Object>> get primaryKey => {episodeId};
 }
+
+class DownloadedEpisodes extends Table {
+  IntColumn get episodeId => integer()();
+  IntColumn get feedId => integer()();
+  TextColumn get episodeTitle => text()();
+  TextColumn get feedTitle => text()();
+  TextColumn get artworkUrl => text().nullable()();
+  TextColumn get enclosureUrl => text()();
+  TextColumn get localPath => text().nullable()();
+  TextColumn get taskId => text().nullable()();
+  /// queued | downloading | paused | completed | failed
+  TextColumn get status => text()();
+  RealColumn get progress => real().withDefault(const Constant(0.0))();
+  IntColumn get fileSizeBytes => integer().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {episodeId};
+}

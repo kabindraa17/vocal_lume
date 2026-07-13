@@ -39,4 +39,40 @@ abstract final class Formatters {
     }
     return '${duration.inMinutes}m';
   }
+
+  static String fileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// Formats download ETA from [background_downloader] timeRemaining.
+  static String downloadEta(Duration remaining) {
+    if (remaining.isNegative) return '';
+    final seconds = remaining.inSeconds;
+    if (seconds < 60) return '${seconds}s left';
+    if (seconds < 3600) {
+      final m = remaining.inMinutes;
+      final s = seconds % 60;
+      return s == 0 ? '${m}m left' : '${m}m ${s}s left';
+    }
+    final h = remaining.inHours;
+    final m = remaining.inMinutes % 60;
+    return m == 0 ? '${h}h left' : '${h}h ${m}m left';
+  }
+
+  /// Formats network speed in MB/s from the downloader.
+  static String downloadSpeed(double mbPerSecond) {
+    if (mbPerSecond < 0) return '';
+    if (mbPerSecond >= 1) return '${mbPerSecond.toStringAsFixed(1)} MB/s';
+    final kb = mbPerSecond * 1000;
+    if (kb < 1) return '<1 KB/s';
+    return '${kb.round()} KB/s';
+  }
+
+  static String downloadPercent(double progress) {
+    return '${(progress * 100).clamp(0, 100).round()}%';
+  }
 }

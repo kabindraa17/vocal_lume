@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/podcast_providers.dart';
-import '../../../core/routing/app_routes.dart';
+import '../../../core/routing/podcast_navigation.dart';
 import '../../../core/widgets/app_top_bar.dart';
 import '../../podcast/data/models/podcast_feed.dart';
+import '../../podcast/domain/podcast_feed_preview.dart';
 import '../../podcast/presentation/widgets/podcast_artwork.dart';
+import 'widgets/curated_categories_section.dart';
+import 'widgets/top_ranked_section.dart';
 
 class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
@@ -30,14 +32,17 @@ class DiscoverScreen extends ConsumerWidget {
                     child: Text(
                       'Explore podcasts',
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.7,
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+            const SliverToBoxAdapter(child: TopRankedSection()),
+            const SliverToBoxAdapter(child: CuratedCategoriesSection()),
             trending.when(
               loading: () => const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
@@ -86,7 +91,9 @@ class _HomeSectionData {
 }
 
 List<_HomeSectionData> _buildHomeSections(List<PodcastFeed> feeds) {
-  final uniqueFeeds = <int, PodcastFeed>{for (final feed in feeds) feed.id: feed};
+  final uniqueFeeds = <int, PodcastFeed>{
+    for (final feed in feeds) feed.id: feed,
+  };
   final feedList = uniqueFeeds.values.toList();
   final sections = <_HomeSectionData>[
     _HomeSectionData(
@@ -96,11 +103,12 @@ List<_HomeSectionData> _buildHomeSections(List<PodcastFeed> feeds) {
     ),
   ];
 
-  final discovery = [...feedList]..sort((a, b) {
-    final aScore = (a.episodeCount ?? 0) + (a.categoryTags.length * 5);
-    final bScore = (b.episodeCount ?? 0) + (b.categoryTags.length * 5);
-    return bScore.compareTo(aScore);
-  });
+  final discovery = [...feedList]
+    ..sort((a, b) {
+      final aScore = (a.episodeCount ?? 0) + (a.categoryTags.length * 5);
+      final bScore = (b.episodeCount ?? 0) + (b.categoryTags.length * 5);
+      return bScore.compareTo(aScore);
+    });
   sections.add(
     _HomeSectionData(
       title: 'Discovery picks',
@@ -199,9 +207,9 @@ class _FeedPreviewCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => context.pushNamed(
-          AppRoutes.podcastDetail,
-          pathParameters: {'id': '${feed.id}'},
+        onTap: () => context.openPodcastDetail(
+          feedId: feed.id,
+          preview: PodcastFeedPreview.fromFeed(feed),
         ),
         child: SizedBox(
           width: 155,
@@ -242,8 +250,9 @@ class _FeedPreviewCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),

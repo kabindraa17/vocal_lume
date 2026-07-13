@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/discover/presentation/discover_screen.dart';
 import '../../features/library/presentation/library_screen.dart';
 import '../../features/player/application/player_notifier.dart';
+import '../../features/podcast/domain/podcast_feed_preview.dart';
 import '../../features/podcast/presentation/episode_detail_screen.dart';
 import '../../features/podcast/presentation/podcast_detail_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
@@ -55,9 +56,15 @@ final GoRouter appRouter = GoRouter(
       name: AppRoutes.podcastDetail,
       pageBuilder: (context, state) {
         final id = int.parse(state.pathParameters['id']!);
+        final preview = state.extra is PodcastFeedPreview
+            ? state.extra! as PodcastFeedPreview
+            : null;
         return _slideUpPage(
           state: state,
-          child: PodcastDetailScreen(feedId: id),
+          child: PodcastDetailScreen(
+            feedId: id,
+            preview: preview,
+          ),
         );
       },
       routes: [
@@ -120,6 +127,7 @@ class _AppShell extends ConsumerWidget {
 
     return Scaffold(
       body: Padding(
+        // Mini player (64) + gap above nav (8) + breathing room.
         padding: EdgeInsets.only(bottom: hasMiniPlayer ? 72 : 0),
         child: child,
       ),

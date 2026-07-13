@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/podcast_providers.dart';
-import '../../../core/routing/app_routes.dart';
+import '../../../core/routing/podcast_navigation.dart';
 import '../../podcast/data/models/podcast_feed.dart';
+import '../../podcast/domain/podcast_feed_preview.dart';
 import '../../podcast/presentation/widgets/podcast_artwork.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -164,9 +164,9 @@ class _SearchResultTile extends StatelessWidget {
       subtitle: Text(feed.hostName),
       trailing: const Icon(Icons.chevron_right),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      onTap: () => context.pushNamed(
-        AppRoutes.podcastDetail,
-        pathParameters: {'id': '${feed.id}'},
+      onTap: () => context.openPodcastDetail(
+        feedId: feed.id,
+        preview: PodcastFeedPreview.fromFeed(feed),
       ),
     );
   }

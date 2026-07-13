@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/podcast_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../downloads/presentation/widgets/start_episode_download.dart';
 import '../../player/application/player_notifier.dart';
 import '../../player/presentation/widgets/play_episode.dart';
 import '../data/models/podcast_episode.dart';
@@ -94,7 +95,7 @@ class _EpisodeDetailBody extends ConsumerWidget {
     final artwork = episode.artworkUrl.isNotEmpty
         ? episode.artworkUrl
         : feed.artworkUrl;
-    final canPlay = episode.enclosureUrl != null && episode.enclosureUrl!.isNotEmpty;
+    final canPlay = episode.hasPlayableAudio;
 
     return CustomScrollView(
       slivers: [
@@ -189,6 +190,22 @@ class _EpisodeDetailBody extends ConsumerWidget {
                         : null,
                     icon: const Icon(Icons.play_arrow_rounded),
                     label: const Text('Play episode'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: canPlay
+                        ? () => startEpisodeDownload(
+                              context,
+                              ref,
+                              episode: episode,
+                              feed: feed,
+                            )
+                        : null,
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Download for offline'),
                   ),
                 ),
                 if (episode.descriptionText.isNotEmpty) ...[
